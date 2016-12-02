@@ -802,7 +802,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
                 } else {
 
-                    // Permission denied, Disable the functionality that depends on this permission.
+                    // Permission denied, Disable the functionality that depends on this permission
 
                     Toast.makeText(this, "permission denied", Toast.LENGTH_LONG).show();
                 }
