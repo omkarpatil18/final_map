@@ -19,8 +19,6 @@ import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.text.Editable;
-import android.text.TextWatcher;
-import android.util.Log;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -56,14 +54,15 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
+import com.google.maps.android.clustering.ClusterManager;
+import com.google.maps.android.clustering.view.DefaultClusterRenderer;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -73,6 +72,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+// managed marker cluster
+//
 
 public class MapsActivity extends AppCompatActivity implements OnMapReadyCallback,
         GoogleApiClient.ConnectionCallbacks,
@@ -80,6 +81,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         LocationListener {
 
     GoogleMap mMap;
+    ClusterManager<ClusterMarkerLocation> mClusterManager;
     ArrayList<LatLng> MarkerPoints;
     GoogleApiClient mGoogleApiClient;
     Location mLastLocation;
@@ -96,8 +98,17 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     ProgressDialog progress, pDialog;
     Context context;
     float searchBarPosX, searchBarPosY;
+
     private static final LatLng MAIN_GATE = new LatLng(13.005976, 80.242486);
     private static final LatLng JAM_BUS_STOP = new LatLng(12.986634, 80.238757);
+    private static final LatLng GAJENDRA_CIRCLE_BUS_STOP = new LatLng(12.991780, 80.233772);
+    private static final LatLng HSB_BUS_STOP = new LatLng(12.990925, 80.231896);
+    private static final LatLng BT_BUS_STOP_1 = new LatLng(12.990287, 80.227627);
+    private static final LatLng VELACHERY_GATE = new LatLng(12.987857, 80.223127);
+    private static final LatLng BT_BUS_STOP_2 = new LatLng(12.989977, 80.227707);
+    private static final LatLng CRC_BUS_STOP = new LatLng(12.988204, 80.230125);
+    private static final LatLng TGH_BUS_STOP = new LatLng(12.986574, 80.233254);
+    private static final LatLng NARMADA_BUS_STOP = new LatLng(12.986473, 80.235324);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -369,6 +380,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                         mMap.addPolyline(lineOptions);
                         item.setIcon(R.drawable.ic_bus_selected);
                         isBusRouteShown = true;
+                        setUpClusterer();
                     } else {
                         progress.setMessage("Getting bus route...");
                         progress.setCancelable(false); // disable dismiss by tapping outside of the dialog
@@ -378,7 +390,12 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
                         LatLng origin = MarkerPoints.get(0);
                         LatLng dest = MarkerPoints.get(1);
+                        isBusRouteShown = true;
 
+                        mMap.moveCamera(CameraUpdateFactory.newLatLng(NARMADA_BUS_STOP));
+                        mMap.animateCamera(CameraUpdateFactory.zoomTo(11));
+
+                        setUpClusterer();
 
                         // Getting URL to the Google Directions API
                         String urlString = getUrl(origin, dest);
@@ -396,6 +413,10 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     polyline.setVisible(false);
                     item.setIcon(R.drawable.ic_bus_deselected);
                     isBusRouteShown = false;
+                    mMap.setOnCameraIdleListener(null);
+                    mMap.setOnMarkerClickListener(null);
+
+
                 }
 
                 return true;
@@ -639,8 +660,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     // Adding all the points in the route to LineOptions
                     lineOptions.addAll(points);
                     lineOptions.width(6);
-                    lineOptions.color(Color.BLUE);
-
+                    lineOptions.color(Color.GRAY);
 
                 }
             }
@@ -712,7 +732,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         //move map camera
         mMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
-        mMap.animateCamera(CameraUpdateFactory.zoomTo(11));
+        mMap.animateCamera(CameraUpdateFactory.zoomTo(15));
 
         //stop location updates
         if (mGoogleApiClient != null) {
@@ -793,4 +813,108 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             // You can add here other case statements according to your requirement.
         }
     }
+
+    private void setUpClusterer() {
+
+            // Initialize the manager with the context and the map.
+            mClusterManager = new ClusterManager<>(this, mMap);
+
+
+            // Point the map's listeners at the listeners implemented by the cluster
+            // manager.
+            mMap.setOnCameraIdleListener(mClusterManager);
+            mMap.setOnMarkerClickListener(mClusterManager);
+
+            // Add cluster items (markers) to the cluster manager.
+            addItems();
+            mClusterManager.setRenderer(new OwnIconRendered(this,mMap, mClusterManager));
+
+    }
+
+
+    private void addItems() {
+
+            ClusterMarkerLocation item1 = new ClusterMarkerLocation(MAIN_GATE);
+            mClusterManager.addItem(item1);
+            ClusterMarkerLocation item2 = new ClusterMarkerLocation(JAM_BUS_STOP);
+            mClusterManager.addItem(item2);
+            ClusterMarkerLocation item3 = new ClusterMarkerLocation(GAJENDRA_CIRCLE_BUS_STOP);
+            mClusterManager.addItem(item3);
+            ClusterMarkerLocation item4 = new ClusterMarkerLocation(HSB_BUS_STOP);
+            mClusterManager.addItem(item4);
+            ClusterMarkerLocation item5 = new ClusterMarkerLocation(BT_BUS_STOP_2);
+            mClusterManager.addItem(item5);
+            ClusterMarkerLocation item6 = new ClusterMarkerLocation(VELACHERY_GATE);
+            mClusterManager.addItem(item6);
+            ClusterMarkerLocation item7 = new ClusterMarkerLocation(CRC_BUS_STOP);
+            mClusterManager.addItem(item7);
+            ClusterMarkerLocation item8 = new ClusterMarkerLocation(TGH_BUS_STOP);
+            mClusterManager.addItem(item8);
+            ClusterMarkerLocation item9 = new ClusterMarkerLocation(NARMADA_BUS_STOP);
+            mClusterManager.addItem(item9);
+
+    }
+    class OwnIconRendered extends DefaultClusterRenderer<ClusterMarkerLocation> {
+
+        public OwnIconRendered(Context context, GoogleMap map,
+                               ClusterManager<ClusterMarkerLocation> clusterManager) {
+            super(context, map, clusterManager);
+        }
+
+        @Override
+        protected void onBeforeClusterItemRendered(ClusterMarkerLocation item, MarkerOptions markerOptions) {
+
+
+            if(item.getPosition()==MAIN_GATE){
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                        .alpha(0.5f)
+                        .title("MAIN GATE");
+            }
+            if(item.getPosition()==JAM_BUS_STOP){
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                        .alpha(0.5f)
+                        .title("JAM BUS STOP");
+            }
+            if(item.getPosition()==GAJENDRA_CIRCLE_BUS_STOP){
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                        .alpha(0.4f)
+                        .title("GAJENDRA CIRCLE BUS STOP");
+            }
+            if(item.getPosition()==HSB_BUS_STOP){
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                        .alpha(0.4f)
+                        .title("HSB BUS STOP");
+            }
+            if(item.getPosition()==VELACHERY_GATE){
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                        .alpha(0.5f)
+                        .title("VELACHERY GATE");
+            }
+            if(item.getPosition()==CRC_BUS_STOP){
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                        .alpha(0.4f)
+                        .title("CRC BUS STOP");
+            }
+            if(item.getPosition()==TGH_BUS_STOP){
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                        .alpha(0.4f)
+                        .title("TGH BUS STOP");
+            }
+            if(item.getPosition()==NARMADA_BUS_STOP){
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                        .alpha(0.4f)
+                        .title("NARMADA BUS STOP");
+            }
+            if(item.getPosition()==BT_BUS_STOP_2){
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                        .alpha(0.4f)
+                        .title("BT BUS STOP");
+            }
+
+
+
+            super.onBeforeClusterItemRendered(item, markerOptions);
+        }
+    }
+
 }
