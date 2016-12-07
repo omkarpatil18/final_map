@@ -67,7 +67,7 @@ public class DataParser {
 
     /**
      * Method to decode polyline points
-     * Courtesy : http://jeffreysambells.com/2010/05/27/decoding-polylines-from-google-maps-direction-api-with-java
+     *
      * */
     private List<LatLng> decodePoly(String encoded) {
 
