@@ -4,13 +4,12 @@ package com.bignerdranch.android.googlemaps;
 import android.Manifest;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
+import android.app.Activity;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
 import android.location.Location;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.support.design.widget.CoordinatorLayout;
@@ -20,10 +19,13 @@ import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.text.Editable;
+import android.util.DisplayMetrics;
+import android.util.TypedValue;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
@@ -33,13 +35,14 @@ import android.widget.AutoCompleteTextView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.android.volley.NetworkResponse;
 import com.android.volley.Request;
-import com.android.volley.RequestQueue;
 import com.android.volley.Response;
 import com.android.volley.VolleyError;
 import com.android.volley.VolleyLog;
+import com.android.volley.toolbox.HttpHeaderParser;
+import com.android.volley.toolbox.JsonRequest;
 import com.android.volley.toolbox.StringRequest;
-import com.android.volley.toolbox.Volley;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationListener;
@@ -63,13 +66,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.xmlpull.v1.XmlPullParserException;
-
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -78,57 +76,45 @@ import java.util.List;
 public class MapsActivity extends AppCompatActivity implements OnMapReadyCallback,
         GoogleApiClient.ConnectionCallbacks,
         GoogleApiClient.OnConnectionFailedListener,
-        LocationListener {
+        LocationListener{
 
-    GoogleMap mMap;
-    ClusterManager<ClusterMarkerLocation> mClusterManager;
-    ArrayList<LatLng> MarkerPoints;
-    GoogleApiClient mGoogleApiClient;
-    Location mLastLocation;
-    Marker mCurrLocationMarker;
-    LocationRequest mLocationRequest;
-    AutoCompleteTextView searchField;
-    Polyline polyline;
-    PolylineOptions lineOptions;
-    Boolean isVisible = false, isBusRouteShown = false, isDownloaded = false;
-    Toolbar myToolbar;
-    Menu myMenu;
-    CoordinatorLayout coordinatorLayout;
-    ArrayList<String> placesArray;
-    ProgressDialog progress, pDialog;
-    Context context;
-    float searchBarPosX, searchBarPosY;
-    KmlLayer layer;
-    LatLng latlng;
+    private GoogleMap mMap;
+    private ClusterManager<ClusterMarkerLocation> mClusterManager=null;
+    private GoogleApiClient mGoogleApiClient;
+    private Location mLastLocation;
+    private Marker mCurrLocationMarker;
+    private LocationRequest mLocationRequest;
+    private AutoCompleteTextView searchField;
+    private Polyline polyline;
+    private PolylineOptions lineOptions;
+    private Boolean isVisible = false, isBusRouteShown = false, isDownloaded = false, isSearchResultShown=false;
+    private Toolbar myToolbar;
+    private Menu myMenu;
+    private CoordinatorLayout coordinatorLayout;
+    private ArrayList<String> placesArray;
+    private ProgressDialog progress, pDialog;
+    private Context context;
+    private float searchBarPosX, searchBarPosY;
+    private KmlLayer layer=null;
+    private String url;
+    private ArrayList<Marker> searchResultMarkers= new ArrayList<>();
+    private ArrayList<MarkerOptions> searchResultMarkerOptions= new ArrayList<>();
 
     private static final LatLng MAIN_GATE = new LatLng(13.005976, 80.242486);
     private static final LatLng JAM_BUS_STOP = new LatLng(12.986634, 80.238757);
     private static final LatLng GAJENDRA_CIRCLE_BUS_STOP = new LatLng(12.991780, 80.233772);
     private static final LatLng HSB_BUS_STOP = new LatLng(12.990925, 80.231896);
-    private static final LatLng BT_BUS_STOP_1 = new LatLng(12.990287, 80.227627);
     private static final LatLng VELACHERY_GATE = new LatLng(12.988461, 80.223328);
-    private static final LatLng BT_BUS_STOP_2 = new LatLng(12.989977, 80.227707);
+    private static final LatLng BT_BUS_STOP= new LatLng(12.989977, 80.227707);
     private static final LatLng CRC_BUS_STOP = new LatLng(12.988204, 80.230125);
     private static final LatLng TGH_BUS_STOP = new LatLng(12.986574, 80.233254);
     private static final LatLng NARMADA_BUS_STOP = new LatLng(12.986473, 80.235324);
 
-    public void onSaveInstanceState(Bundle outState){
-        outState.putDouble("LAT", mMap.getCameraPosition().target.latitude);
-        outState.putDouble("LON", mMap.getCameraPosition().target.longitude);
-        outState.putBoolean("BUS_ROUTE",isBusRouteShown);
-        super.onSaveInstanceState(outState);
-    }
+    private static final LatLng FOURTH_CROSS_STREET_BUS_STOP = new LatLng(12.99599484, 80.23595825);
+    private static final LatLng KV_BUS_STOP = new LatLng(12.99398019, 80.23437828);
+    private static final LatLng VANVANI_BUS_STOP = new LatLng(12.9987747, 80.23919707 );
 
-    //onRestoreInstanceState
-    @Override
-    public void onRestoreInstanceState(Bundle savedInstanceState) {
-        super.onRestoreInstanceState(savedInstanceState);
-        // Restore UI state from the savedInstanceState.
-        // This bundle has also been passed to onCreate.
-        isBusRouteShown = savedInstanceState.getBoolean("BUS_ROUTE");
-        latlng = new LatLng(savedInstanceState.getDouble("LAT"),savedInstanceState.getDouble("LON"));
 
-    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -142,7 +128,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         progress = new ProgressDialog(this);
         coordinatorLayout = (CoordinatorLayout) findViewById(R.id.coord_layout);
 
-        placesArray = new ArrayList<String>();
+        placesArray = new ArrayList<>();
 
         getSuggestions();
 
@@ -155,13 +141,15 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
             public void onItemClick(AdapterView<?> parent, View view, int position, long rowId) {
                 final String selection = (String) parent.getItemAtPosition(position);
-                searchField.setText(selection);
-                animateSearchOut();
-                setBusDeselectedIcon();
-                mMap.clear();
+
                 pDialog.setMessage("Searching...");
                 pDialog.setCancelable(false);
                 pDialog.show();
+                searchField.setText("");
+                removeSearchResult();
+                searchField.setHint(selection);
+                isSearchResultShown=true;
+
                 Thread thread = new Thread() {
                     @Override
                     public void run() {
@@ -177,12 +165,14 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                                                   public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
                                                       if (actionId == EditorInfo.IME_ACTION_SEARCH) {
                                                           final Editable selection = searchField.getText();
-                                                          animateSearchOut();
-                                                          setBusDeselectedIcon();
-                                                          mMap.clear();
                                                           pDialog.setMessage("Searching...");
                                                           pDialog.setCancelable(false);
                                                           pDialog.show();
+                                                          removeSearchResult();
+                                                          searchField.setText("");
+                                                          searchField.setHint(selection.toString());
+                                                          isSearchResultShown=true;
+
                                                           Thread thread = new Thread() {
                                                               @Override
                                                               public void run() {
@@ -199,26 +189,35 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         );
 
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
 
         {
             checkLocationPermission();
         }
-        // Initializing
-        MarkerPoints = new ArrayList<>();
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
-
     }
 
-    private void setBusDeselectedIcon() {
-        if (polyline != null) polyline.setVisible(false);
-        myMenu.findItem(R.id.bus_route).setIcon(R.drawable.ic_bus_deselected);
-        isBusRouteShown = false;
+    public void removeSearchResult(){
+        for(Marker marker:searchResultMarkers){
+            marker.remove();
+        }
+    }
+
+    public static void hideKeyboard(Activity activity) {
+        InputMethodManager imm = (InputMethodManager) activity.getSystemService(Activity.INPUT_METHOD_SERVICE);
+        //Find the currently focused view, so we can grab the correct window token from it.
+        View view = activity.getCurrentFocus();
+        //If no view currently has focus, create a new one, just so we can grab a window token from it
+        if (view == null) {
+            view = new View(activity);
+        }
+        imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
     }
 
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -232,7 +231,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     public void doMySearch(String query) {
 
-        final RequestQueue queue = Volley.newRequestQueue(getApplicationContext());
 
         Uri.Builder builder = new Uri.Builder();
         builder.scheme("https")//https://students.iitm.ac.in/studentsapp/map/get_location.php?
@@ -258,6 +256,10 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     int i;
                     String locationName, locationDescription, latitude = "12.991780", longitude = "80.233772";
                     LatLng latLong;
+
+                    if(searchResultMarkers!=null) searchResultMarkers.clear();
+                    if(searchResultMarkerOptions!=null) searchResultMarkerOptions.clear();
+
                     for (i = 0; i < jsonArray.length(); i++) {
                         jsonObject = jsonArray.getJSONObject(i);
                         locationName = jsonObject.getString("locname");
@@ -266,21 +268,25 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                         longitude = jsonObject.getString("long");
 
                         latLong = new LatLng(Double.parseDouble(latitude), Double.parseDouble(longitude));
-                        mMap.addMarker(new MarkerOptions()
+                        MarkerOptions markerOption = new MarkerOptions()
                                 .title(locationName)
                                 .snippet(locationDescription)
-                                .position(latLong));
+                                .position(latLong);
+                        searchResultMarkerOptions.add(markerOption);
+                        searchResultMarkers.add(mMap.addMarker(markerOption));
+
                     }
+
                     if (pDialog.isShowing()) pDialog.dismiss();
                     LatLng latLngGC;
                     if (jsonArray.length() == 1) {
                         latLngGC = new LatLng(Double.parseDouble(latitude), Double.parseDouble(longitude));
-                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLngGC, 18));
+                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLngGC, 16));
                     } else {
                         latLngGC = new LatLng(12.991780, 80.233772);
                         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLngGC, 14));
                         Snackbar snackbar = Snackbar
-                                .make(coordinatorLayout, "Showing all related results...", Snackbar.LENGTH_LONG);
+                                .make(coordinatorLayout, "Showing all related results.", Snackbar.LENGTH_LONG);
                         snackbar.show();
                     }
                 } catch (JSONException e) {
@@ -292,6 +298,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     e.printStackTrace();
 
                 }
+
+                hideKeyboard(MapsActivity.this);
 
             }
         }, new Response.ErrorListener() {
@@ -306,12 +314,11 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
             }
         });
-        queue.add(jsonObjReq);
+        MySingleton.getInstance(context).addToRequestQueue(jsonObjReq);
     }
 
     private void getSuggestions() {
 
-        final RequestQueue queue = Volley.newRequestQueue(getApplicationContext());
 
         Uri.Builder builder = new Uri.Builder();
         builder.scheme("https")//https://students.iitm.ac.in/studentsapp/map/get_names.php
@@ -340,7 +347,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                         placesArray.add(locationName);
                     }
                     isDownloaded = true;
-                    ArrayAdapter<String> adapter = new ArrayAdapter<String>(context,
+                    ArrayAdapter<String> adapter = new ArrayAdapter<>(context,
                             android.R.layout.simple_dropdown_item_1line, placesArray);
                     searchField.setAdapter(adapter);
                 } catch (JSONException e) {
@@ -356,22 +363,13 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
             @Override
             public void onErrorResponse(VolleyError error) {
-                Toast.makeText(getApplicationContext(), "Couldn't update data.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getApplicationContext(), "Couldn't obtain suggestions.", Toast.LENGTH_SHORT).show();
 
             }
         });
-        queue.add(jsonObjReq);
+        MySingleton.getInstance(context).addToRequestQueue(jsonObjReq);
     }
 
-    /**
-     * Manipulates the map once available.
-     * This callback is triggered when the map is ready to be used.
-     * This is where we can add markers or lines, add listeners or move the camera. In this case,
-     * we just add a marker near Sydney, Australia.
-     * If Google Play services is not installed on the device, the user will be prompted to install
-     * it inside the SupportMapFragment. This method will only be triggered once the user has
-     * installed Google Play services and returned to the app.
-     */
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
@@ -379,9 +377,17 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
                 if (isVisible) {
                     animateSearchOut();
+                    mMap.getUiSettings().setMyLocationButtonEnabled(true);
+                    mMap.getUiSettings().setCompassEnabled(true);
+                    removeSearchResult();
+                    isSearchResultShown=false;
+
                 } else {
                     if (!isDownloaded) getSuggestions();
                     animateSearchIn();
+                    searchField.setHint(R.string.search_hint);
+                    mMap.getUiSettings().setMyLocationButtonEnabled(false);
+                    mMap.getUiSettings().setCompassEnabled(false);
                 }
 
                 return true;
@@ -394,68 +400,29 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             case R.id.bus_route:
                 // User chose the "Favorite" action, mark the current item
                 // as a favorite...
-                mMap.clear();
                 if (!isBusRouteShown) {
 
                     if (polyline != null) {
                         mMap.addPolyline(lineOptions);
                         item.setIcon(R.drawable.ic_bus_selected);
-                        isBusRouteShown = true;
                         setUpClusterer();
-
-                        try {
-                            layer.addLayerToMap();
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                            Toast.makeText(this, "Could not load iitm boundary", Toast.LENGTH_SHORT).show();
-                        } catch (XmlPullParserException e) {
-                            e.printStackTrace();
-                            Toast.makeText(this, "Could not load iitm boundary", Toast.LENGTH_SHORT).show();
-                        }
+                        showCampusBoundary();
 
                     } else {
-                        progress.setMessage("Getting bus route...");
+                        progress.setMessage("Getting bus route.");
                         progress.setCancelable(false); // disable dismiss by tapping outside of the dialog
                         progress.show();
-                        MarkerPoints.add(MAIN_GATE);
-                        MarkerPoints.add(JAM_BUS_STOP);
-
-                        LatLng origin = MarkerPoints.get(0);
-                        LatLng dest = MarkerPoints.get(1);
-                        isBusRouteShown = true;
 
                         mMap.moveCamera(CameraUpdateFactory.newLatLng(NARMADA_BUS_STOP));
                         mMap.animateCamera(CameraUpdateFactory.zoomTo(11));
 
+                        buildDirectionsUri();
                         setUpClusterer();
-
-                        // Getting URL to the Google Directions API
-                        String urlString = getUrl(origin, dest);
-                        FetchUrl FetchUrl = new FetchUrl();
-
-                        // Start downloading json data from Google Directions API
-                        FetchUrl.execute(urlString);
-                        //move map camera
-
-                        try {
-                            layer = new KmlLayer(mMap, R.raw.boundary, getApplicationContext());
-                        } catch (XmlPullParserException e) {
-                            e.printStackTrace();
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-
-                        try {
-                            layer.addLayerToMap();
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                            Toast.makeText(this, "Could not load boundary", Toast.LENGTH_SHORT).show();
-                        } catch (XmlPullParserException e) {
-                            e.printStackTrace();
-                            Toast.makeText(this, "Could not load boundary", Toast.LENGTH_SHORT).show();
-                        }
+                        showBusRoute();
 
                     }
+                    isBusRouteShown = true;
+
                 } else {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                         item.setIcon(getResources().getDrawable(R.drawable.ic_bus_deselected, this.getTheme()));
@@ -464,9 +431,21 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     polyline.setVisible(false);
                     item.setIcon(R.drawable.ic_bus_deselected);
                     isBusRouteShown = false;
+
+                    mMap.clear();
                     mMap.setOnCameraIdleListener(null);
                     mMap.setOnMarkerClickListener(null);
-                    layer.removeLayerFromMap();
+                    showCampusBoundary();
+
+                    if(isSearchResultShown){
+                        for(int i=0;i<searchResultMarkers.size();i++){
+                            Marker marker = searchResultMarkers.get(i);
+                            if (!marker.isVisible()){
+                                mMap.addMarker(searchResultMarkerOptions.get(i));
+                            }
+                        }
+                    }
+
                 }
 
                 return true;
@@ -477,6 +456,61 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 return super.onOptionsItemSelected(item);
 
         }
+    }
+
+    private void showCampusBoundary(){
+        if (layer == null) {
+            try {
+                layer = new KmlLayer(mMap, R.raw.boundary, getApplicationContext());
+            } catch (XmlPullParserException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+        }
+
+        try {
+            layer.addLayerToMap();
+        } catch (IOException e) {
+            e.printStackTrace();
+            Toast.makeText(this, "Could not load boundary", Toast.LENGTH_SHORT).show();
+        } catch (XmlPullParserException e) {
+            e.printStackTrace();
+            Toast.makeText(this, "Could not load boundary", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void buildDirectionsUri(){
+
+        LatLng origin = MAIN_GATE;
+        LatLng dest = JAM_BUS_STOP;
+
+        String str_origin = origin.latitude + "," + origin.longitude;
+
+        String str_dest = dest.latitude + "," + dest.longitude;
+
+        String waypoints = "12.991780,80.233772|12.990925,80.231896|12.990287,80.227627|12.987857,80.223127|12.989977,80.227707|12.988204,80.230125|12.986574,80.233254|12.988461,80.223328";
+
+        // Sensor enabled
+        String sensor_is = "false";
+
+        //https://maps.googleapis.com/maps/api/directions/outputFormat?parameters
+        Uri.Builder builder = new Uri.Builder();
+        builder.scheme("https")
+                .authority("maps.googleapis.com")
+                .appendPath("maps")
+                .appendPath("api")
+                .appendPath("directions")
+                .appendPath("json")
+                .appendQueryParameter("origin", str_origin)
+                .appendQueryParameter("destination",str_dest )
+                .appendQueryParameter("waypoints",waypoints)
+                .appendQueryParameter("sensor",sensor_is);
+
+        // Building the url to the web service
+        url = builder.build().toString();
+
     }
 
     private void animateSearchOut() {
@@ -521,30 +555,12 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     public void onMapReady(GoogleMap googleMap) {
 
+        mMap = googleMap;
         LatLng testGC = new LatLng(12.991780, 80.233772);
 
-        googleMap.setMyLocationEnabled(false);
-        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(testGC, 17));
+        mMap.moveCamera( CameraUpdateFactory.newLatLngZoom(testGC , 11.0f) );
 
-        mMap = googleMap;
-
-        try {
-            layer = new KmlLayer(mMap, R.raw.boundary, getApplicationContext());
-        } catch (XmlPullParserException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        try {
-            layer.addLayerToMap();
-        } catch (IOException e) {
-            e.printStackTrace();
-            Toast.makeText(this, "Could not load boundary", Toast.LENGTH_SHORT).show();
-        } catch (XmlPullParserException e) {
-            e.printStackTrace();
-            Toast.makeText(this, "Could not load boundary", Toast.LENGTH_SHORT).show();
-        }
+        showCampusBoundary();
 
         //Initialize Google Play Services
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -552,206 +568,18 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     Manifest.permission.ACCESS_FINE_LOCATION)
                     == PackageManager.PERMISSION_GRANTED) {
                 buildGoogleApiClient();
-                mMap.setMyLocationEnabled(false);
+                mMap.setMyLocationEnabled(true);
             }
         } else {
             buildGoogleApiClient();
-            mMap.setMyLocationEnabled(true);
+            mMap.setMyLocationEnabled(false);
         }
+        mMap.getUiSettings().setMyLocationButtonEnabled(true);
 
-    }
-
-    private String getUrl(LatLng origin, LatLng dest) {
-
-        // Origin of route
-        String str_origin = "origin=" + origin.latitude + "," + origin.longitude;
-
-        // Destination of route
-        String str_dest = "destination=" + dest.latitude + "," + dest.longitude;
-
-        String waypoints = "waypoints=12.991780,80.233772|12.990925,80.231896|12.990287,80.227627|12.987857,80.223127|12.989977,80.227707|12.988204,80.230125|12.986574,80.233254|12.988461, 80.223328";
-
-        // Sensor enabled
-        String sensor = "sensor=false";
-
-        // Building the parameters to the web service
-        String parameters = str_origin + "&" + str_dest + "&" + waypoints + "&" + sensor;
-
-        // Output format
-        String output = "json";
-
-        // Building the url to the web service
-        String url = "https://maps.googleapis.com/maps/api/directions/" + output + "?" + parameters;
-
-
-        return url;
-    }
-
-    /**
-     * A method to download json data from url
-     */
-    private String downloadUrl(String strUrl) throws IOException {
-        String data = "";
-        InputStream iStream = null;
-        HttpURLConnection urlConnection = null;
-        try {
-            URL url = new URL(strUrl);
-
-            // Creating an http connection to communicate with url
-            urlConnection = (HttpURLConnection) url.openConnection();
-
-            // Connecting to url
-            urlConnection.connect();
-
-            // Reading data from url
-            iStream = urlConnection.getInputStream();
-
-            BufferedReader br = new BufferedReader(new InputStreamReader(iStream));
-
-            StringBuffer sb = new StringBuffer();
-
-            String line = "";
-            while ((line = br.readLine()) != null) {
-                sb.append(line);
-            }
-
-            data = sb.toString();
-            br.close();
-
-        } catch (Exception e) {
-            if (progress.isShowing()) {
-                progress.dismiss();
-                isBusRouteShown = false;
-                Snackbar snackbar = Snackbar
-                        .make(coordinatorLayout, "Couldn't connect to internet.", Snackbar.LENGTH_LONG);
-                snackbar.show();
-            }
-        } finally {
-            iStream.close();
-            urlConnection.disconnect();
-        }
-        return data;
-    }
-
-
-    // Fetches data from url passed
-    private class FetchUrl extends AsyncTask<String, Void, String> {
-
-        @Override
-        protected String doInBackground(String... url) {
-
-            // For storing data from web service
-            String data = "";
-
-            try {
-                // Fetching the data from web service
-                data = downloadUrl(url[0]);
-            } catch (Exception e) {
-                if (progress.isShowing()) {
-                    progress.dismiss();
-                    isBusRouteShown = false;
-                    Snackbar snackbar = Snackbar
-                            .make(coordinatorLayout, "Couldn't connect to internet.", Snackbar.LENGTH_LONG);
-                    snackbar.show();
-                }
-            }
-            return data;
-        }
-
-        @Override
-        protected void onPostExecute(String result) {
-            super.onPostExecute(result);
-
-            ParserTask parserTask = new ParserTask();
-
-            // Invokes the thread for parsing the JSON data
-            parserTask.execute(result);
-
-        }
-    }
-
-    /**
-     * A class to parse the Google Places in JSON format
-     */
-    private class ParserTask extends AsyncTask<String, Integer, List<List<HashMap<String, String>>>> {
-
-        // Parsing the data in non-ui thread
-        @Override
-        protected List<List<HashMap<String, String>>> doInBackground(String... jsonData) {
-
-            JSONObject jObject;
-            List<List<HashMap<String, String>>> routes = null;
-
-            try {
-                jObject = new JSONObject(jsonData[0]);
-                DataParser parser = new DataParser();
-
-                // Starts parsing data
-                routes = parser.parse(jObject);
-
-            } catch (Exception e) {
-                if (progress.isShowing()) {
-                    progress.dismiss();
-                    isBusRouteShown = false;
-                    Snackbar snackbar = Snackbar
-                            .make(coordinatorLayout, "Error parsing data, try again later...", Snackbar.LENGTH_LONG);
-                    snackbar.show();
-                }
-                e.printStackTrace();
-            }
-            return routes;
-        }
-
-        // Executes in UI thread, after the parsing process
-        @Override
-        protected void onPostExecute(List<List<HashMap<String, String>>> result) {
-            ArrayList<LatLng> points;
-            lineOptions = null;
-
-            // Traversing through all the routes
-            if (result != null) {
-                for (int i = 0; i < result.size(); i++) {
-                    points = new ArrayList<>();
-                    lineOptions = new PolylineOptions();
-                    // Fetching i-th route
-                    List<HashMap<String, String>> path = result.get(i);
-
-                    // Fetching all the points in i-th route
-                    for (int j = 0; j < path.size(); j++) {
-                        HashMap<String, String> point = path.get(j);
-
-                        double lat = Double.parseDouble(point.get("lat"));
-                        double lng = Double.parseDouble(point.get("lng"));
-                        LatLng position = new LatLng(lat, lng);
-
-                        points.add(position);
-                    }
-
-                    // Adding all the points in the route to LineOptions
-                    lineOptions.addAll(points);
-                    lineOptions.width(6);
-                    lineOptions.color(Color.BLUE);
-
-
-                }
-            }
-
-            // Drawing polyline in the Google Map for the i-th route
-            if (lineOptions != null) {
-                polyline = mMap.addPolyline(lineOptions);
-                isBusRouteShown = true;
-                MenuItem item = myMenu.findItem(R.id.bus_route);
-                item.setIcon(R.drawable.ic_bus_selected);
-                if (progress.isShowing()) progress.dismiss();
-            } else {
-                if (progress.isShowing()) {
-                    isBusRouteShown = false;
-                    progress.dismiss();
-                    Snackbar snackbar = Snackbar
-                            .make(coordinatorLayout, "Error getting route, try again later...", Snackbar.LENGTH_LONG);
-                    snackbar.show();
-                }
-            }
+        TypedValue tv = new TypedValue();
+        if (getTheme().resolveAttribute(android.R.attr.actionBarSize, tv, true)) {
+            int actionBarHeight = TypedValue.complexToDimensionPixelSize(tv.data,getResources().getDisplayMetrics());
+            mMap.setPadding(0, actionBarHeight, 0, 0);
         }
 
     }
@@ -793,13 +621,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             mCurrLocationMarker.remove();
         }
 
-        //Place current location marker
         LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
-        MarkerOptions markerOptions = new MarkerOptions();
-        markerOptions.position(latLng);
-        markerOptions.title("Current Position");
-        markerOptions.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA));
-        mCurrLocationMarker = mMap.addMarker(markerOptions);
 
         //move map camera
         mMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
@@ -885,33 +707,135 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
+    protected void showBusRoute(){
+
+        Request request = new JsonRequest< List<List<HashMap<String, String>>>>(Request.Method.GET, url, null, new Response.Listener<List<List<HashMap<String, String>>>>() {
+
+            @Override
+            public void onResponse(List<List<HashMap<String, String>>> response) {
+                ArrayList<LatLng> points;
+                lineOptions = null;
+
+                // Traversing through all the routes
+                if (response != null) {
+                    for (int i = 0; i < response.size(); i++) {
+                        points = new ArrayList<>();
+                        lineOptions = new PolylineOptions();
+                        // Fetching i-th route
+                        List<HashMap<String, String>> path = response.get(i);
+
+                        // Fetching all the points in i-th route
+                        for (int j = 0; j < path.size(); j++) {
+                            HashMap<String, String> point = path.get(j);
+
+                            double lat = Double.parseDouble(point.get("lat"));
+                            double lng = Double.parseDouble(point.get("lng"));
+                            LatLng position = new LatLng(lat, lng);
+
+                            points.add(position);
+                        }
+
+                        // Adding all the points in the route to LineOptions
+                        lineOptions.addAll(points);
+                        lineOptions.width(4);
+                        lineOptions.color(ContextCompat.getColor(context, R.color.polyline_blue));
+
+
+                    }
+                }
+
+                // Drawing polyline in the Google Map for the i-th route
+                if (lineOptions != null) {
+                    polyline = mMap.addPolyline(lineOptions);
+                    isBusRouteShown = true;
+                    MenuItem item = myMenu.findItem(R.id.bus_route);
+                    item.setIcon(R.drawable.ic_bus_selected);
+                    if (progress.isShowing()) progress.dismiss();
+                } else {
+                    if (progress.isShowing()) {
+                        isBusRouteShown = false;
+                        progress.dismiss();
+                        Snackbar snackbar = Snackbar
+                                .make(coordinatorLayout, "Error getting route, try again later.", Snackbar.LENGTH_LONG);
+                        snackbar.show();
+                    }
+                }
+
+            }
+        }, new Response.ErrorListener() {
+
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                // Handle the error
+                // error.networkResponse.statusCode
+                // error.networkResponse.data
+                isBusRouteShown = false;
+                Toast.makeText(MapsActivity.this, "Loading failed!", Toast.LENGTH_LONG).show();
+            }
+        }) {
+
+            @Override
+            protected Response<List<List<HashMap<String, String>>>> parseNetworkResponse(NetworkResponse response) {
+                String jsonString = null;
+                try {
+                    jsonString = new String(response.data, HttpHeaderParser.parseCharset(response.headers));
+                } catch (UnsupportedEncodingException e) {
+                    e.printStackTrace();
+                }
+
+                JSONObject jObject;
+                List<List<HashMap<String, String>>> routes = null;
+
+                try {
+                    jObject = new JSONObject(jsonString);
+                    DataParser parser = new DataParser();
+
+                    // Starts parsing data
+                    routes = parser.parse(jObject);
+                } catch (Exception e) {
+                    if (progress.isShowing()) {
+                        progress.dismiss();
+                        isBusRouteShown = false;
+                        Snackbar snackbar = Snackbar
+                                .make(coordinatorLayout, "Error parsing data, try again later...", Snackbar.LENGTH_LONG);
+                        snackbar.show();
+                    }
+                    e.printStackTrace();
+                }
+
+                return Response.success(routes, HttpHeaderParser.parseCacheHeaders(response));
+            }
+        };
+        MySingleton.getInstance(MapsActivity.this).addToRequestQueue(request);
+    }
+
     private void setUpClusterer() {
 
-        // Initialize the manager with the context and the map.
-        mClusterManager = new ClusterManager<>(this, mMap);
+        if(mClusterManager==null){
+            // Initialize the manager with the context and the map.
+            mClusterManager = new ClusterManager<>(this, mMap);
 
+
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                // TODO: Consider calling
+                //    ActivityCompat#requestPermissions
+                // here to request the missing permissions, and then overriding
+                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                //                                          int[] grantResults)
+                // to handle the case where the user grants the permission. See the documentation
+                // for ActivityCompat#requestPermissions for more details.
+                return;
+            }
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(GAJENDRA_CIRCLE_BUS_STOP, 14));
+
+            // Add cluster items (markers) to the cluster manager.
+            addItems();
+        }
 
         // Point the map's listeners at the listeners implemented by the cluster
         // manager.
         mMap.setOnCameraIdleListener(mClusterManager);
         mMap.setOnMarkerClickListener(mClusterManager);
-
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return;
-        }
-        mMap.setMyLocationEnabled(true);
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(GAJENDRA_CIRCLE_BUS_STOP, 14));
-
-
-        // Add cluster items (markers) to the cluster manager.
-        addItems();
         mClusterManager.setRenderer(new OwnIconRendered(this, mMap, mClusterManager));
 
     }
@@ -919,24 +843,21 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private void addItems() {
 
-        ClusterMarkerLocation item1 = new ClusterMarkerLocation(MAIN_GATE);
-        mClusterManager.addItem(item1);
-        ClusterMarkerLocation item2 = new ClusterMarkerLocation(JAM_BUS_STOP);
-        mClusterManager.addItem(item2);
-        ClusterMarkerLocation item3 = new ClusterMarkerLocation(GAJENDRA_CIRCLE_BUS_STOP);
-        mClusterManager.addItem(item3);
-        ClusterMarkerLocation item4 = new ClusterMarkerLocation(HSB_BUS_STOP);
-        mClusterManager.addItem(item4);
-        ClusterMarkerLocation item5 = new ClusterMarkerLocation(BT_BUS_STOP_2);
-        mClusterManager.addItem(item5);
-        ClusterMarkerLocation item6 = new ClusterMarkerLocation(VELACHERY_GATE);
-        mClusterManager.addItem(item6);
-        ClusterMarkerLocation item7 = new ClusterMarkerLocation(CRC_BUS_STOP);
-        mClusterManager.addItem(item7);
-        ClusterMarkerLocation item8 = new ClusterMarkerLocation(TGH_BUS_STOP);
-        mClusterManager.addItem(item8);
-        ClusterMarkerLocation item9 = new ClusterMarkerLocation(NARMADA_BUS_STOP);
-        mClusterManager.addItem(item9);
+        ArrayList<ClusterMarkerLocation> items = new ArrayList<>();
+        items.add(new ClusterMarkerLocation(MAIN_GATE));
+        items.add(new ClusterMarkerLocation(GAJENDRA_CIRCLE_BUS_STOP));
+        items.add(new ClusterMarkerLocation(HSB_BUS_STOP));
+        items.add(new ClusterMarkerLocation(BT_BUS_STOP));
+        items.add(new ClusterMarkerLocation(VELACHERY_GATE));
+        items.add(new ClusterMarkerLocation(CRC_BUS_STOP));
+        items.add(new ClusterMarkerLocation(TGH_BUS_STOP));
+        items.add(new ClusterMarkerLocation(JAM_BUS_STOP));
+        items.add(new ClusterMarkerLocation(NARMADA_BUS_STOP));
+        items.add(new ClusterMarkerLocation(FOURTH_CROSS_STREET_BUS_STOP));
+        items.add(new ClusterMarkerLocation(KV_BUS_STOP));
+        items.add(new ClusterMarkerLocation(VANVANI_BUS_STOP));
+
+        mClusterManager.addItems(items);
 
     }
 
@@ -952,49 +873,64 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
 
             if (item.getPosition() == MAIN_GATE) {
-                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.6f)
-                        .title("MAIN GATE");
+                        .title("Main Gate");
             }
             if (item.getPosition() == JAM_BUS_STOP) {
-                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.6f)
-                        .title("JAM BUS STOP");
+                        .title("Jam Bus Stop");
             }
             if (item.getPosition() == GAJENDRA_CIRCLE_BUS_STOP) {
-                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.5f)
-                        .title("GAJENDRA CIRCLE BUS STOP");
+                        .title("Gajendra Circle Bus Stop");
             }
             if (item.getPosition() == HSB_BUS_STOP) {
-                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.5f)
-                        .title("HSB BUS STOP");
+                        .title("HSB Bus Stop");
             }
             if (item.getPosition() == VELACHERY_GATE) {
-                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.6f)
-                        .title("VELACHERY GATE");
+                        .title("Velachery Gate");
             }
             if (item.getPosition() == CRC_BUS_STOP) {
-                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.5f)
-                        .title("CRC BUS STOP");
+                        .title("CRC Bus Stop");
             }
             if (item.getPosition() == TGH_BUS_STOP) {
-                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.5f)
-                        .title("TGH BUS STOP");
+                        .title("TGH Bus Stop");
             }
             if (item.getPosition() == NARMADA_BUS_STOP) {
-                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.5f)
-                        .title("NARMADA BUS STOP");
+                        .title("Narmada Bus Stop");
             }
-            if (item.getPosition() == BT_BUS_STOP_2) {
-                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_radio_button_checked_black_24dp))
+            if (item.getPosition() == BT_BUS_STOP) {
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.5f)
-                        .title("BT BUS STOP");
+                        .title("BT Bus Stop");
+            }
+            if (item.getPosition() == FOURTH_CROSS_STREET_BUS_STOP) {
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
+                        .alpha(0.5f)
+                        .title("4th Cross Street Bus Stop");
+            }
+            if (item.getPosition() == KV_BUS_STOP) {
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
+                        .alpha(0.5f)
+                        .title("KV Bus Stop");
+            }
+            if (item.getPosition() == VANVANI_BUS_STOP) {
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
+                        .alpha(0.5f)
+                        .title("Vanvani Bus Stop");
             }
 
 

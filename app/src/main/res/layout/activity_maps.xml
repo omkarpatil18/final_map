@@ -45,11 +45,13 @@
         android:alpha="0.7"
         android:background="@drawable/bg_search_field"
         android:drawableLeft="@drawable/ic_search_black_24dp"
+        android:drawableStart="@drawable/ic_search_black_24dp"
         android:drawablePadding="8dp"
         android:hint="Search places"
         android:imeOptions="actionSearch"
         android:inputType="textAutoComplete"
         android:paddingLeft="8dp"
+        android:paddingRight="8dp"
         android:textSize="16sp" />
 
 </android.support.design.widget.CoordinatorLayout>
