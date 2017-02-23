@@ -35,6 +35,7 @@ import android.widget.AutoCompleteTextView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.android.volley.DefaultRetryPolicy;
 import com.android.volley.NetworkResponse;
 import com.android.volley.Request;
 import com.android.volley.Response;
@@ -66,20 +67,23 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.xmlpull.v1.XmlPullParserException;
+
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import static com.bignerdranch.android.googlemaps.IITMBusStops.*;
 
 public class MapsActivity extends AppCompatActivity implements OnMapReadyCallback,
         GoogleApiClient.ConnectionCallbacks,
         GoogleApiClient.OnConnectionFailedListener,
-        LocationListener{
+        LocationListener {
 
     private GoogleMap mMap;
-    private ClusterManager<ClusterMarkerLocation> mClusterManager=null;
+    private ClusterManager<ClusterMarkerLocation> mClusterManager = null;
     private GoogleApiClient mGoogleApiClient;
     private Location mLastLocation;
     private Marker mCurrLocationMarker;
@@ -87,7 +91,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     private AutoCompleteTextView searchField;
     private Polyline polyline;
     private PolylineOptions lineOptions;
-    private Boolean isVisible = false, isBusRouteShown = false, isDownloaded = false, isSearchResultShown=false;
+    private Boolean isVisible = false, isBusRouteShown = false, isDownloaded = false, isSearchResultShown = false;
     private Toolbar myToolbar;
     private Menu myMenu;
     private CoordinatorLayout coordinatorLayout;
@@ -95,25 +99,10 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     private ProgressDialog progress, pDialog;
     private Context context;
     private float searchBarPosX, searchBarPosY;
-    private KmlLayer layer=null;
+    private KmlLayer layer = null;
     private String url;
-    private ArrayList<Marker> searchResultMarkers= new ArrayList<>();
-    private ArrayList<MarkerOptions> searchResultMarkerOptions= new ArrayList<>();
-
-    private static final LatLng MAIN_GATE = new LatLng(13.005976, 80.242486);
-    private static final LatLng JAM_BUS_STOP = new LatLng(12.986634, 80.238757);
-    private static final LatLng GAJENDRA_CIRCLE_BUS_STOP = new LatLng(12.991780, 80.233772);
-    private static final LatLng HSB_BUS_STOP = new LatLng(12.990925, 80.231896);
-    private static final LatLng VELACHERY_GATE = new LatLng(12.988461, 80.223328);
-    private static final LatLng BT_BUS_STOP= new LatLng(12.989977, 80.227707);
-    private static final LatLng CRC_BUS_STOP = new LatLng(12.988204, 80.230125);
-    private static final LatLng TGH_BUS_STOP = new LatLng(12.986574, 80.233254);
-    private static final LatLng NARMADA_BUS_STOP = new LatLng(12.986473, 80.235324);
-
-    private static final LatLng FOURTH_CROSS_STREET_BUS_STOP = new LatLng(12.99599484, 80.23595825);
-    private static final LatLng KV_BUS_STOP = new LatLng(12.99398019, 80.23437828);
-    private static final LatLng VANVANI_BUS_STOP = new LatLng(12.9987747, 80.23919707 );
-
+    private ArrayList<Marker> searchResultMarkerArray = new ArrayList<>();
+    private ArrayList<MarkerOptions> searchResultMarkerOptionsArray = new ArrayList<>();
 
 
     @Override
@@ -142,21 +131,28 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             public void onItemClick(AdapterView<?> parent, View view, int position, long rowId) {
                 final String selection = (String) parent.getItemAtPosition(position);
 
-                pDialog.setMessage("Searching...");
-                pDialog.setCancelable(false);
-                pDialog.show();
-                searchField.setText("");
-                removeSearchResult();
-                searchField.setHint(selection);
-                isSearchResultShown=true;
+                if (selection.length() > 2) {
+                    pDialog.setMessage("Searching...");
+                    pDialog.setCancelable(false);
+                    pDialog.show();
+                    searchField.setText("");
+                    removeSearchResult();
+                    searchField.setHint(selection);
+                    isSearchResultShown = true;
 
-                Thread thread = new Thread() {
-                    @Override
-                    public void run() {
-                        doMySearch(selection);
-                    }
-                };
-                thread.start();
+                    Thread thread = new Thread() {
+                        @Override
+                        public void run() {
+                            doMySearch(selection);
+                        }
+                    };
+                    thread.start();
+                } else {
+                    Toast.makeText(context, "Enter more than two characters", Toast.LENGTH_SHORT).show();
+                    //Snackbar snackbar = Snackbar.make(coordinatorLayout, "Enter more than two characters", Snackbar.LENGTH_LONG);
+                    //snackbar.show();
+                }
+
             }
         });
 
@@ -165,21 +161,29 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                                                   public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
                                                       if (actionId == EditorInfo.IME_ACTION_SEARCH) {
                                                           final Editable selection = searchField.getText();
-                                                          pDialog.setMessage("Searching...");
-                                                          pDialog.setCancelable(false);
-                                                          pDialog.show();
-                                                          removeSearchResult();
-                                                          searchField.setText("");
-                                                          searchField.setHint(selection.toString());
-                                                          isSearchResultShown=true;
 
-                                                          Thread thread = new Thread() {
-                                                              @Override
-                                                              public void run() {
-                                                                  doMySearch(selection.toString());
-                                                              }
-                                                          };
-                                                          thread.start();
+                                                          if (selection.toString().length() > 2) {
+                                                              pDialog.setMessage("Searching...");
+                                                              pDialog.setCancelable(false);
+                                                              pDialog.show();
+                                                              removeSearchResult();
+                                                              searchField.setText("");
+                                                              searchField.setHint(selection.toString());
+                                                              isSearchResultShown = true;
+
+                                                              Thread thread = new Thread() {
+                                                                  @Override
+                                                                  public void run() {
+                                                                      doMySearch(selection.toString());
+                                                                  }
+                                                              };
+                                                              thread.start();
+                                                          } else {
+                                                              Toast.makeText(context, "Enter more than two characters", Toast.LENGTH_SHORT).show();
+                                                              //Snackbar snackbar = Snackbar.make(coordinatorLayout, "Enter more than two characters", Snackbar.LENGTH_LONG);
+                                                              //snackbar.show();
+                                                          }
+
                                                           return true;
                                                       }
 
@@ -203,8 +207,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     }
 
-    public void removeSearchResult(){
-        for(Marker marker:searchResultMarkers){
+    public void removeSearchResult() {
+        for (Marker marker : searchResultMarkerArray) {
             marker.remove();
         }
     }
@@ -257,8 +261,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     String locationName, locationDescription, latitude = "12.991780", longitude = "80.233772";
                     LatLng latLong;
 
-                    if(searchResultMarkers!=null) searchResultMarkers.clear();
-                    if(searchResultMarkerOptions!=null) searchResultMarkerOptions.clear();
+                    if (searchResultMarkerArray != null) searchResultMarkerArray.clear();
+                    if (searchResultMarkerOptionsArray != null) searchResultMarkerOptionsArray.clear();
 
                     for (i = 0; i < jsonArray.length(); i++) {
                         jsonObject = jsonArray.getJSONObject(i);
@@ -272,8 +276,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                                 .title(locationName)
                                 .snippet(locationDescription)
                                 .position(latLong);
-                        searchResultMarkerOptions.add(markerOption);
-                        searchResultMarkers.add(mMap.addMarker(markerOption));
+                        searchResultMarkerOptionsArray.add(markerOption);
+                        searchResultMarkerArray.add(mMap.addMarker(markerOption));
 
                     }
 
@@ -311,6 +315,10 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 Snackbar snackbar = Snackbar
                         .make(coordinatorLayout, "Couldn't connect to the server.", Snackbar.LENGTH_LONG);
                 snackbar.show();
+                MenuItem search_item = myMenu.findItem(R.id.search_go_btn);
+                search_item.setIcon(R.drawable.ic_search_deselected);
+                hideKeyboard(MapsActivity.this);
+                animateSearchOut();
 
             }
         });
@@ -380,7 +388,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     mMap.getUiSettings().setMyLocationButtonEnabled(true);
                     mMap.getUiSettings().setCompassEnabled(true);
                     removeSearchResult();
-                    isSearchResultShown=false;
+                    isSearchResultShown = false;
 
                 } else {
                     if (!isDownloaded) getSuggestions();
@@ -413,7 +421,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                         progress.setCancelable(false); // disable dismiss by tapping outside of the dialog
                         progress.show();
 
-                        mMap.moveCamera(CameraUpdateFactory.newLatLng(NARMADA_BUS_STOP));
+                        mMap.moveCamera(CameraUpdateFactory.newLatLng(gajendra_circle_bus_stop));
                         mMap.animateCamera(CameraUpdateFactory.zoomTo(11));
 
                         buildDirectionsUri();
@@ -424,10 +432,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     isBusRouteShown = true;
 
                 } else {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        item.setIcon(getResources().getDrawable(R.drawable.ic_bus_deselected, this.getTheme()));
-                    }
-
+                    item.setIcon(ContextCompat.getDrawable(MapsActivity.this, R.drawable.ic_bus_deselected));
                     polyline.setVisible(false);
                     item.setIcon(R.drawable.ic_bus_deselected);
                     isBusRouteShown = false;
@@ -437,12 +442,11 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     mMap.setOnMarkerClickListener(null);
                     showCampusBoundary();
 
-                    if(isSearchResultShown){
-                        for(int i=0;i<searchResultMarkers.size();i++){
-                            Marker marker = searchResultMarkers.get(i);
-                            if (!marker.isVisible()){
-                                mMap.addMarker(searchResultMarkerOptions.get(i));
-                            }
+                    Toast.makeText(context, searchResultMarkerArray.size()+"", Toast.LENGTH_SHORT).show();
+
+                    if (isSearchResultShown) {
+                        for (MarkerOptions markerOptions : searchResultMarkerOptionsArray) {
+                            searchResultMarkerArray.add(mMap.addMarker(markerOptions));
                         }
                     }
 
@@ -458,7 +462,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
-    private void showCampusBoundary(){
+    private void showCampusBoundary() {
         if (layer == null) {
             try {
                 layer = new KmlLayer(mMap, R.raw.boundary, getApplicationContext());
@@ -481,10 +485,10 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
-    private void buildDirectionsUri(){
+    private void buildDirectionsUri() {
 
-        LatLng origin = MAIN_GATE;
-        LatLng dest = JAM_BUS_STOP;
+        LatLng origin = main_gate;
+        LatLng dest = jam_bus_stop;
 
         String str_origin = origin.latitude + "," + origin.longitude;
 
@@ -504,9 +508,9 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .appendPath("directions")
                 .appendPath("json")
                 .appendQueryParameter("origin", str_origin)
-                .appendQueryParameter("destination",str_dest )
-                .appendQueryParameter("waypoints",waypoints)
-                .appendQueryParameter("sensor",sensor_is);
+                .appendQueryParameter("destination", str_dest)
+                .appendQueryParameter("waypoints", waypoints)
+                .appendQueryParameter("sensor", sensor_is);
 
         // Building the url to the web service
         url = builder.build().toString();
@@ -558,7 +562,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         mMap = googleMap;
         LatLng testGC = new LatLng(12.991780, 80.233772);
 
-        mMap.moveCamera( CameraUpdateFactory.newLatLngZoom(testGC , 11.0f) );
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(testGC, 11.0f));
 
         showCampusBoundary();
 
@@ -572,13 +576,13 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         } else {
             buildGoogleApiClient();
-            mMap.setMyLocationEnabled(false);
+            mMap.setMyLocationEnabled(true );
         }
         mMap.getUiSettings().setMyLocationButtonEnabled(true);
 
         TypedValue tv = new TypedValue();
         if (getTheme().resolveAttribute(android.R.attr.actionBarSize, tv, true)) {
-            int actionBarHeight = TypedValue.complexToDimensionPixelSize(tv.data,getResources().getDisplayMetrics());
+            int actionBarHeight = TypedValue.complexToDimensionPixelSize(tv.data, getResources().getDisplayMetrics());
             mMap.setPadding(0, actionBarHeight, 0, 0);
         }
 
@@ -707,9 +711,9 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
-    protected void showBusRoute(){
+    protected void showBusRoute() {
 
-        Request request = new JsonRequest< List<List<HashMap<String, String>>>>(Request.Method.GET, url, null, new Response.Listener<List<List<HashMap<String, String>>>>() {
+        Request request = new JsonRequest<List<List<HashMap<String, String>>>>(Request.Method.GET, url, null, new Response.Listener<List<List<HashMap<String, String>>>>() {
 
             @Override
             public void onResponse(List<List<HashMap<String, String>>> response) {
@@ -770,7 +774,12 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 // error.networkResponse.statusCode
                 // error.networkResponse.data
                 isBusRouteShown = false;
-                Toast.makeText(MapsActivity.this, "Loading failed!", Toast.LENGTH_LONG).show();
+
+                MenuItem item = myMenu.findItem(R.id.bus_route);
+                item.setIcon(R.drawable.ic_bus_deselected);
+                Snackbar snackbar = Snackbar.make(coordinatorLayout, "Internet Connection Failed", Snackbar.LENGTH_LONG);
+                snackbar.show();
+                //Toast.makeText(MapsActivity.this, "Loading failed!", Toast.LENGTH_LONG).show();
             }
         }) {
 
@@ -807,11 +816,17 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         };
         MySingleton.getInstance(MapsActivity.this).addToRequestQueue(request);
+
+        int MY_SOCKET_TIMEOUT_MS = 10000;
+        request.setRetryPolicy(new DefaultRetryPolicy(
+                MY_SOCKET_TIMEOUT_MS,
+                DefaultRetryPolicy.DEFAULT_MAX_RETRIES,
+                DefaultRetryPolicy.DEFAULT_BACKOFF_MULT));
     }
 
     private void setUpClusterer() {
 
-        if(mClusterManager==null){
+        if (mClusterManager == null) {
             // Initialize the manager with the context and the map.
             mClusterManager = new ClusterManager<>(this, mMap);
 
@@ -826,7 +841,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 // for ActivityCompat#requestPermissions for more details.
                 return;
             }
-            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(GAJENDRA_CIRCLE_BUS_STOP, 14));
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(gajendra_circle_bus_stop, 14));
 
             // Add cluster items (markers) to the cluster manager.
             addItems();
@@ -844,18 +859,18 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     private void addItems() {
 
         ArrayList<ClusterMarkerLocation> items = new ArrayList<>();
-        items.add(new ClusterMarkerLocation(MAIN_GATE));
-        items.add(new ClusterMarkerLocation(GAJENDRA_CIRCLE_BUS_STOP));
-        items.add(new ClusterMarkerLocation(HSB_BUS_STOP));
-        items.add(new ClusterMarkerLocation(BT_BUS_STOP));
-        items.add(new ClusterMarkerLocation(VELACHERY_GATE));
-        items.add(new ClusterMarkerLocation(CRC_BUS_STOP));
-        items.add(new ClusterMarkerLocation(TGH_BUS_STOP));
-        items.add(new ClusterMarkerLocation(JAM_BUS_STOP));
-        items.add(new ClusterMarkerLocation(NARMADA_BUS_STOP));
-        items.add(new ClusterMarkerLocation(FOURTH_CROSS_STREET_BUS_STOP));
-        items.add(new ClusterMarkerLocation(KV_BUS_STOP));
-        items.add(new ClusterMarkerLocation(VANVANI_BUS_STOP));
+        items.add(new ClusterMarkerLocation(main_gate));
+        items.add(new ClusterMarkerLocation(gajendra_circle_bus_stop));
+        items.add(new ClusterMarkerLocation(hsb_bus_stop));
+        items.add(new ClusterMarkerLocation(bt_bus_stop));
+        items.add(new ClusterMarkerLocation(velachery_gate));
+        items.add(new ClusterMarkerLocation(crc_bus_stop));
+        items.add(new ClusterMarkerLocation(tgh_bus_stop));
+        items.add(new ClusterMarkerLocation(jam_bus_stop));
+        items.add(new ClusterMarkerLocation(gurunath_bus_stop));
+        items.add(new ClusterMarkerLocation(fourth_cross_street_bus_stop));
+        items.add(new ClusterMarkerLocation(kv_bus_stop));
+        items.add(new ClusterMarkerLocation(vanvani_bus_stop));
 
         mClusterManager.addItems(items);
 
@@ -872,62 +887,62 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         protected void onBeforeClusterItemRendered(ClusterMarkerLocation item, MarkerOptions markerOptions) {
 
 
-            if (item.getPosition() == MAIN_GATE) {
+            if (item.getPosition() == main_gate) {
                 markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.6f)
                         .title("Main Gate");
             }
-            if (item.getPosition() == JAM_BUS_STOP) {
+            if (item.getPosition() == jam_bus_stop) {
                 markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.6f)
                         .title("Jam Bus Stop");
             }
-            if (item.getPosition() == GAJENDRA_CIRCLE_BUS_STOP) {
+            if (item.getPosition() == gajendra_circle_bus_stop) {
                 markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.5f)
                         .title("Gajendra Circle Bus Stop");
             }
-            if (item.getPosition() == HSB_BUS_STOP) {
+            if (item.getPosition() == hsb_bus_stop) {
                 markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.5f)
                         .title("HSB Bus Stop");
             }
-            if (item.getPosition() == VELACHERY_GATE) {
+            if (item.getPosition() == velachery_gate) {
                 markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.6f)
                         .title("Velachery Gate");
             }
-            if (item.getPosition() == CRC_BUS_STOP) {
+            if (item.getPosition() == crc_bus_stop) {
                 markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.5f)
                         .title("CRC Bus Stop");
             }
-            if (item.getPosition() == TGH_BUS_STOP) {
+            if (item.getPosition() == tgh_bus_stop) {
                 markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.5f)
                         .title("TGH Bus Stop");
             }
-            if (item.getPosition() == NARMADA_BUS_STOP) {
+            if (item.getPosition() == gurunath_bus_stop) {
                 markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.5f)
-                        .title("Narmada Bus Stop");
+                        .title("Gurunath Bus Stop");
             }
-            if (item.getPosition() == BT_BUS_STOP) {
+            if (item.getPosition() == bt_bus_stop) {
                 markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.5f)
                         .title("BT Bus Stop");
             }
-            if (item.getPosition() == FOURTH_CROSS_STREET_BUS_STOP) {
+            if (item.getPosition() == fourth_cross_street_bus_stop) {
                 markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.5f)
                         .title("4th Cross Street Bus Stop");
             }
-            if (item.getPosition() == KV_BUS_STOP) {
+            if (item.getPosition() == kv_bus_stop) {
                 markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.5f)
                         .title("KV Bus Stop");
             }
-            if (item.getPosition() == VANVANI_BUS_STOP) {
+            if (item.getPosition() == vanvani_bus_stop) {
                 markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_directions_bus_black_18dp))
                         .alpha(0.5f)
                         .title("Vanvani Bus Stop");
